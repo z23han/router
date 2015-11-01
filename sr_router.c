@@ -205,13 +205,14 @@ void sr_handle_ippacket(struct sr_instance* sr,
     struct sr_arpcache *sr_arp_cache = &sr->cache;
 
     /* Get the interface on the router */
-    struct sr_if *sr_iface = sr_get_interface(sr, interface);
+	struct sr_if *sr_iface = sr_get_router_if(sr, ip_hdr->ip_dst);
 
     /* Get the protocol from IP */
-    uint8_t ip_p = ntohs(ip_hdr->ip_p);
+    uint8_t ip_p = ip_hdr->ip_p;
 
     /* If the packet is sent to self, meaning the ip is sent to the router */
-    if (sr_iface->ip == ip_hdr->ip_dst) {
+    if (sr_iface) {
+		printf("********** sent to self ***********\n");
         /* Check the protocol if it is icmp */
         if (ip_p == ip_protocol_icmp) {
             /* Get the icmp header */
@@ -220,7 +221,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
-            if (ntohs(icmp_hdr->icmp_type) == 8) {
+            if (icmp_hdr->icmp_type == 8) {
 				fprintf(stderr, "********** icmp request ***********\n");
                 int packet_len = ICMP_PACKET_LEN;
                 uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
@@ -457,7 +458,7 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
     assert(icmp_hdr);
     assert(new_icmp_hdr);
     /* here we construct a echo reply icmp */
-    new_icmp_hdr->icmp_type = htons(0);
+    new_icmp_hdr->icmp_type = 0;
     /* code and checksum should be the same */
     new_icmp_hdr->icmp_code = icmp_hdr->icmp_code;
     /* do we need to check the checksum??? */
@@ -473,10 +474,11 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
     icmp_t3_hdr->icmp_type = htons(icmp_type);
     /* get the icmp code from the input */
     icmp_t3_hdr->icmp_code = htons(icmp_code);
+	icmp_t3_hdr->icmp_sum = 0;
     uint16_t checksum = cksum(icmp_t3_hdr, sizeof(sr_icmp_t3_hdr_t));
-    icmp_t3_hdr->icmp_sum = htons(checksum);
-    icmp_t3_hdr->unused = htons(0);
-    icmp_t3_hdr->next_mtu = htons(1500);
+    icmp_t3_hdr->icmp_sum = checksum;
+    icmp_t3_hdr->unused = 0;
+    icmp_t3_hdr->next_mtu = 1500;
     memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
     return;
 }
@@ -524,7 +526,7 @@ struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
 
 
 /* Send arp request packet, this is broadcast */
-void send_arp_req_packet(struct sr_instance *sr, char * out_iface, uint32_t dest_ip) {
+void send_arp_req_packet_broadcast(struct sr_instance *sr, char * out_iface, uint32_t dest_ip) {
     assert(sr);
     assert(out_iface);
     assert(dest_ip);
@@ -567,3 +569,20 @@ void send_arp_req_packet(struct sr_instance *sr, char * out_iface, uint32_t dest
     free(arp_req_hdr);
     return;
 }
+
+
+/* get the possible interface from router */
+struct sr_if *sr_get_router_if(struct sr_instance *sr, uint32_t ip) {
+	assert(sr);
+	assert(ip);
+	struct sr_if *iface_list = sr->if_list;		/* Get a list of interfaces */
+	/* Loop through the interface list until reaching the same ip */
+	while (iface_list) {
+		if (iface_list->ip == ip) {
+			return iface_list;
+		}
+		iface_list = iface_list->next;
+	}
+	return NULL;
+}
+

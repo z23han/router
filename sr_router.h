@@ -87,7 +87,8 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
 int check_min_length(unsigned int len, unsigned int packet_len);
 int verify_checksum(void *_data, int len, uint16_t packet_cksum);
 struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst);
-void send_arp_req_packet(struct sr_instance *sr, char * out_iface, uint32_t dest_ip);
+void send_arp_req_packet_broadcast(struct sr_instance *sr, char * out_iface, uint32_t dest_ip);
+struct sr_if *sr_get_router_if(struct sr_instance *sr, uint32_t ip);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

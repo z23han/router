@@ -71,12 +71,12 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 new_ip_hdr->ip_sum = cksum(new_ip_hdr, sizeof(sr_ip_hdr_t));
                 /* Create icmp type 3 header */
                 sr_icmp_t3_hdr_t *new_icmp_hdr = (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-                new_icmp_hdr->icmp_type = htons(3);
-                new_icmp_hdr->icmp_code = htons(1);
-                new_icmp_hdr->unused = htons(0);
-                new_icmp_hdr->next_mtu = htons(1500);
+                new_icmp_hdr->icmp_type = 3;
+                new_icmp_hdr->icmp_code = 1;
+                new_icmp_hdr->unused = 0;
+                new_icmp_hdr->next_mtu = 1500;
                 memcpy(new_icmp_hdr->data, new_ip_hdr, ICMP_DATA_SIZE);
-                new_icmp_hdr->icmp_sum = htons(cksum(new_icmp_hdr, sizeof(sr_icmp_t3_hdr_t)));
+                new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
 
                 /* Send icmp type 3 packet */
                 sr_send_packet(sr, icmp_t3_hdr, packet_len, out_if->name);
@@ -85,7 +85,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
             sr_arpreq_destroy(cache, arp_req);
         } else {
             /* send arp request */
-            send_arp_req_packet(sr, (arp_req->packets)->iface, arp_req->ip);
+            send_arp_req_packet_broadcast(sr, (arp_req->packets)->iface, arp_req->ip);
             arp_req->sent = now; /* current time */
             arp_req->times_sent++;
         }
@@ -119,8 +119,11 @@ void handle_arpreply(sr_arp_hdr_t *arp_hdr, struct sr_instance* sr) {
             unsigned int length = packet_walker->len;
             /* we only need to update the mac sender address in the ethernet header part  */
             sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)buf;
-            memcpy(eth_hdr->ether_shost, arp_hdr->ar_sha, ETHER_ADDR_LEN);
-            sr_send_packet(sr, buf, length, packet_walker->iface);
+			/* Ge the interface from the router */
+			struct sr_if *out_if = sr_get_interface(sr, packet_walker->iface);
+			unsigned char *sender_mac = out_if->addr;
+            memcpy(eth_hdr->ether_shost, sender_mac, ETHER_ADDR_LEN);
+            sr_send_packet(sr, buf, length, out_if->name);
             packet_walker = packet_walker->next;
         }
         sr_arpreq_destroy(cache, arp_req);
