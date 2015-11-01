@@ -26,6 +26,7 @@ function handle_arpreq(req):
 */
 void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     /* Get the ARP cache */
+	fprintf(stderr, "********* handle arp request **************\n");
     struct sr_arpcache *cache = &(sr->cache);
 
     time_t now = time(0);
@@ -34,11 +35,12 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
             /* Get a list of packets on the queue */
             struct sr_packet *packet_walker = arp_req->packets;
 
-            while (packet_walker) {
+            while (packet_walker != NULL) {
                 /* Send icmp host unreachable */
                 /* Get the interface of the router */
                 struct sr_if *out_if = sr_get_interface(sr, packet_walker->iface);
                 /* Collect the sender and receiver mac/ip addresses */
+
                 unsigned char *sender_mac = out_if->addr;
                 uint32_t sender_ip = out_if->ip;
                 /* get the packet frame in the waiting queue */
@@ -66,7 +68,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 new_ip_hdr->ip_p = htons(ip_protocol_icmp);
                 new_ip_hdr->ip_src = sender_ip;
                 new_ip_hdr->ip_dst = receiver_ip;
-                new_ip_hdr->ip_sum = htons(cksum(new_ip_hdr, sizeof(sr_ip_hdr_t)));
+                new_ip_hdr->ip_sum = cksum(new_ip_hdr, sizeof(sr_ip_hdr_t));
                 /* Create icmp type 3 header */
                 sr_icmp_t3_hdr_t *new_icmp_hdr = (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
                 new_icmp_hdr->icmp_type = htons(3);

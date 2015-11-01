@@ -215,11 +215,13 @@ void sr_handle_ippacket(struct sr_instance* sr,
         /* Check the protocol if it is icmp */
         if (ip_p == ip_protocol_icmp) {
             /* Get the icmp header */
+			fprintf(stderr, "********** icmp protocol ***********\n");
             sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet);
 
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
             if (ntohs(icmp_hdr->icmp_type) == 8) {
+				fprintf(stderr, "********** icmp request ***********\n");
                 int packet_len = ICMP_PACKET_LEN;
                 uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
 
@@ -293,11 +295,13 @@ void sr_handle_ippacket(struct sr_instance* sr,
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
         if (dst_lpm) {
+			fprintf(stderr, "********* Get the longest prefix match *********\n");
             /* check ARP cache */
             struct sr_if *out_if = sr_get_interface(sr, dst_lpm->interface);
             struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, dst_lpm->gw.s_addr);
             /* If hit, meaning the arp_entry is found */
             if (arp_entry) {
+				fprintf(stderr, "************ found the lpm router entry ***********\n");
                 /* Send frame to next hop */
                 fprintf(stderr, "There is a match in the ARP cache!!\n");
                 /* update the eth_hdr source and destination ethernet address */
@@ -525,25 +529,26 @@ void send_arp_req_packet(struct sr_instance *sr, char * out_iface, uint32_t dest
     assert(out_iface);
     assert(dest_ip);
     /* Get the interface from the router */
+	fprintf(stderr, "********* send arp request ***********\n");
     struct sr_if *out_if = sr_get_interface(sr, out_iface);
 
     int packet_len = ARP_PACKET_LEN;
     uint8_t *arp_req_hdr = (uint8_t *)malloc(packet_len);
     /* Create ethernet header */
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)arp_req_hdr;
-    memcpy(eth_hdr->ether_dhost, out_if->addr, ETHER_ADDR_LEN);     /* destination ethernet address */
+    memcpy(eth_hdr->ether_shost, out_if->addr, ETHER_ADDR_LEN);     /* destination ethernet address */
 	int i;
     for (i = 0; i < ETHER_ADDR_LEN; ++i) {                      /* source ethernet address */
-        eth_hdr->ether_shost[i] = htons(255);          
+        eth_hdr->ether_dhost[i] = 255;          
     }
     eth_hdr->ether_type = htons(ethertype_arp);             /* packet type ID */
 
     /* Create arp header */
     sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)((char *)arp_req_hdr + ETHER_PACKET_LEN);
     arp_hdr->ar_hrd = htons(arp_hrd_ethernet);      /* format of hardware address   */
-    arp_hdr->ar_pro = htons(ethertype_arp);         /* format of protocol address   */
+    arp_hdr->ar_pro = htons(ethertype_ip);         /* format of protocol address   */
     arp_hdr->ar_hln = ETHER_ADDR_LEN;               /* length of hardware address   */
-    arp_hdr->ar_pln = htons(4);                     /* length of protocol address   */
+    arp_hdr->ar_pln = 4;                     		/* length of protocol address   */
     arp_hdr->ar_op = htons(arp_op_request);         /* ARP opcode (command)         */
     /* sender hardware address      */
     memcpy(arp_hdr->ar_sha, out_if->addr, ETHER_ADDR_LEN);
@@ -551,13 +556,14 @@ void send_arp_req_packet(struct sr_instance *sr, char * out_iface, uint32_t dest
     arp_hdr->ar_sip = out_if->ip;
     /* target hardware address      */
     for (i = 0; i < ETHER_ADDR_LEN; ++i) {
-        arp_hdr->ar_tha[i] = htons(255);
+        arp_hdr->ar_tha[i] = 255;
     }
     /* target IP address            */
     arp_hdr->ar_tip = dest_ip;
     
     /* Send arp request packet */
     sr_send_packet(sr, arp_req_hdr, packet_len, out_if->name);
+	printf("************ send arp packet *************\n");
     free(arp_req_hdr);
     return;
 }
