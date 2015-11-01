@@ -276,7 +276,10 @@ void sr_handle_ippacket(struct sr_instance* sr,
             return;
         }
         /* checksum */
-        if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), ip_hdr->ip_sum)) {
+		/* Set the checksum to be 0 after recording the checksum */
+		uint16_t old_ip_sum = ip_hdr->ip_sum;
+		ip_hdr->ip_sum = 0;
+        if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), old_ip_sum)) {
             fprintf(stderr, "CHECKSUM FAILED!!\n");
             return;
         }
@@ -481,8 +484,6 @@ int verify_checksum(void *_data, int len, uint16_t packet_cksum) {
         return 1;
     } else {
         fprintf(stderr, "checksum is not correct!\n");
-		print_hdr_ip(_data);
-		printf("cksum = %d      packet_sum=%d\n", cksum(_data, len), packet_cksum);
         return 0;
     }
 }
@@ -507,8 +508,8 @@ struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
     struct sr_rt *lpm_rt = sr->routing_table;
     while (routing_table) {
         if ((ip_dst & routing_table->mask.s_addr) == (routing_table->dest.s_addr & routing_table->mask.s_addr)) {
-            if (len < (ip_dst & routing_table->mask.s_addr)) {
-                len = ip_dst & routing_table->mask.s_addr;
+            if (len < routing_table->mask.s_addr) {
+                len = routing_table->mask.s_addr;
                 lpm_rt = routing_table;
             }
         }
