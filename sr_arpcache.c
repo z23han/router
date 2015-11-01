@@ -140,9 +140,12 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /* Fill this in */
     struct sr_arpreq *arp_req = sr->cache.requests;
-    struct sr_arpreq *arp_req_next = arp_req->next;
+    struct sr_arpreq *arp_req_next;
     while (arp_req) {
         handle_arpreq(arp_req, sr);
+		if (arp_req->next) {
+			arp_req_next = arp_req->next;
+		}
         arp_req = arp_req_next;
         arp_req_next = arp_req_next->next;
     }

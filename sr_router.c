@@ -78,6 +78,7 @@ void sr_handlepacket(struct sr_instance* sr,
     assert(packet);
     assert(interface);
 
+
     /* copy into a new packet for better handling :) */
     uint8_t *packet1 = packet;
 
@@ -92,6 +93,7 @@ void sr_handlepacket(struct sr_instance* sr,
     uint16_t eth_type = ethertype(packet1);
 
     /* ARP REQUEST & REPLY */
+	
     if (eth_type == ethertype_arp) {
         fprintf(stderr, "********** ARP packet **********\n");
         sr_handle_arppacket(sr, packet1, len, interface);
