@@ -79,8 +79,7 @@ void sr_handlepacket(struct sr_instance* sr,
     assert(interface);
 
     /* copy into a new packet for better handling :) */
-    uint8_t *packet1;
-    memcpy(packet1, packet, sizeof(uint8_t));
+    uint8_t *packet1 = packet;
 
     printf("*** -> Received packet of length %d \n",len);
 
