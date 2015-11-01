@@ -474,12 +474,12 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
     icmp_t3_hdr->icmp_type = icmp_type;
     /* get the icmp code from the input */
     icmp_t3_hdr->icmp_code = icmp_code;
-    icmp_t3_hdr->unused = 0;
-    icmp_t3_hdr->next_mtu = 1500;
-    memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
 	icmp_t3_hdr->icmp_sum = 0;
     uint16_t checksum = cksum(icmp_t3_hdr, sizeof(sr_icmp_t3_hdr_t));
     icmp_t3_hdr->icmp_sum = checksum;
+    icmp_t3_hdr->unused = 0;
+    icmp_t3_hdr->next_mtu = 1500;
+    memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
     return;
 }
 
