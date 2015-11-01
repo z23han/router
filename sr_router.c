@@ -82,8 +82,6 @@ void sr_handlepacket(struct sr_instance* sr,
     /* copy into a new packet for better handling :) */
     uint8_t *packet1 = packet;
 
-	print_hdr_eth(packet1);
-
     printf("*** -> Received packet of length %d \n",len);
 
     /* sanity-check the packet (meets min length) */
@@ -160,7 +158,7 @@ void sr_handle_arppacket(struct sr_instance* sr,
             create_back_arp_hdr(arp_hdr, (sr_arp_hdr_t *)((unsigned char *)arp_reply_hdr+ETHER_PACKET_LEN), sr_iface);
 
             /* Send APR reply */
-            sr_send_packet(sr, arp_reply_hdr, packet_len, sr_iface->name);
+            sr_send_packet(sr, (sr_ethernet_hdr_t *)arp_reply_hdr, packet_len, sr_iface->name);
             fprintf(stderr, "********** Sent ARP reply packet successfully!!\n");
             free(arp_reply_hdr);
             return;
@@ -285,10 +283,9 @@ void sr_handle_ippacket(struct sr_instance* sr,
         /* decrement the ttl by 1 */
         ip_hdr->ip_ttl--;
         /* recompute the packet checksum over the modified header */
-        if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), ip_hdr->ip_sum)) {
-            fprintf(stderr, "CHECKSUM FAILED!!\n");
-            return;
-        }
+        ip_hdr->ip_sum = 0;
+		uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+		ip_hdr->ip_sum = new_ip_sum;
         /* Do LPM on the routing table */
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
@@ -351,7 +348,7 @@ sr_ethernet_hdr_t *get_eth_hdr(uint8_t *packet) {
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)(packet);
     if (!eth_hdr) {
         fprintf(stderr, "Failed to get the ethernet header!\n");
-        return;
+        return 0;
     } 
     return eth_hdr;
 }
@@ -398,10 +395,10 @@ void create_ethernet_hdr(sr_ethernet_hdr_t *eth_hdr, sr_ethernet_hdr_t *new_eth_
     assert(eth_hdr);
     assert(new_eth_hdr);
     /* swap the sender and receiver ethernet addresses */
-    memcpy(new_eth_hdr->ether_dhost, eth_hdr->ether_dhost, ETHER_ADDR_LEN);
+    memcpy(new_eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
     memcpy(new_eth_hdr->ether_shost, sr_iface->addr, ETHER_ADDR_LEN);
     /* type should be the same as the input ethernet */
-    new_eth_hdr->ether_type = htons(eth_hdr->ether_type);
+    new_eth_hdr->ether_type = eth_hdr->ether_type;
     return;
 }
 
@@ -478,12 +475,14 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
 }
 
 
-/* Check ICMP checksum */
+/* Check the checksum */
 int verify_checksum(void *_data, int len, uint16_t packet_cksum) {
     if (cksum(_data, len) == packet_cksum) {
         return 1;
     } else {
         fprintf(stderr, "checksum is not correct!\n");
+		print_hdr_ip(_data);
+		printf("cksum = %d      packet_sum=%d\n", cksum(_data, len), packet_cksum);
         return 0;
     }
 }
