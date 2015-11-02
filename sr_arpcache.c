@@ -28,7 +28,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     /* Get the ARP cache */
 	/*fprintf(stderr, "********* handle arp request **************\n");*/
     struct sr_arpcache *cache = &(sr->cache);
-
+printf("osososo\n");
     time_t now = time(0);
     if (difftime(now, arp_req->sent) >= 1.0) {
         if (arp_req->times_sent >= 5) {
@@ -119,7 +119,7 @@ void handle_arpreply(sr_arp_hdr_t *arp_hdr, struct sr_instance* sr) {
             unsigned int length = packet_walker->len;
             /* we only need to update the mac sender address in the ethernet header part  */
             sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)buf;
-			/* Ge the interface from the router */
+			/* Get the interface from the router */
 			struct sr_if *out_if = sr_get_interface(sr, packet_walker->iface);
 			unsigned char *sender_mac = out_if->addr;
 			/* Change the sender mac address to be the router address */

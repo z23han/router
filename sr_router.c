@@ -213,7 +213,6 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
     /* If the packet is sent to self, meaning the ip is sent to the router */
     if (sr_iface) {
-		/*printf("********** sent to self ***********\n");*/
         /* Check the protocol if it is icmp */
         if (ip_p == ip_protocol_icmp) {
             /* Get the icmp header */
@@ -223,24 +222,43 @@ void sr_handle_ippacket(struct sr_instance* sr,
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
-				/*fprintf(stderr, "********** icmp request ***********\n");*/
-                int packet_len = ICMP_PACKET_LEN;
-                uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
+				/* Check if it is in the ARP cache */
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, sr_iface->ip);
+				/* If hit, meaning the arp mapping has been cached */
+				if (arp_entry != NULL) {
+					/* We need to send the icmp echo reply */
+					int packet_len = ICMP_PACKET_LEN;
+		            uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
+printf("hohohohoho\n");
+		            /* Create ethernet header */
+		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_iface);
 
-                /* Create ethernet header */
-                create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_iface);
+		            /* Create ip header */
+		            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_reply_hdr+ETHER_PACKET_LEN));
 
-                /* Create ip header */
-                create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_reply_hdr+ETHER_PACKET_LEN));
+		            /* Create icmp header */
+		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((char *)icmp_reply_hdr+IP_PACKET_LEN));
 
-                /* Create icmp header */
-                create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((char *)icmp_reply_hdr+IP_PACKET_LEN));
+		            /* Send icmp echo reply */
+		            sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_iface->name);
+		            /*fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");*/
+					print_hdrs(icmp_reply_hdr, packet_len);
+		            free(icmp_reply_hdr);
+		            return;
+				}
+				/* Else no hit, we cache it to the queue and send arp request */ 
+				else {
+					/* Add request to the ARP queue */
+					/* Here I should add the source address since it should be a sent-back ICMP */
+					icmp_hdr->icmp_type = 0;
+					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, packet, len, sr_iface->name);
+					/* Send ARP request, which is a broadcast */
+					handle_arpreq(arp_req, sr);
+printf("hahaha11111111111\n");
+					return;
+				}
 
-                /* Send icmp echo reply */
-                sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_iface->name);
-                /*fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");*/
-                free(icmp_reply_hdr);
-                return;
+                
             } else {
                 fprintf(stderr, "Not an ICMP request!\n");
                 return;
@@ -445,7 +463,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
     new_ip_hdr->ip_len = ip_hdr->ip_len;        /* total length */
     new_ip_hdr->ip_id = ip_hdr->ip_id;          /* identification */
     new_ip_hdr->ip_off = ip_hdr->ip_off;        /* fragment offset field */
-    new_ip_hdr->ip_ttl = 64;                    /* time to live */
+    new_ip_hdr->ip_ttl = 100;                    /* time to live */
     new_ip_hdr->ip_p = ip_hdr->ip_p;            /* protocol */
     /* do we need to check the checksum??? */
     new_ip_hdr->ip_sum = ip_hdr->ip_sum;        /* checksum */
