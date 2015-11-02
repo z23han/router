@@ -95,13 +95,13 @@ void sr_handlepacket(struct sr_instance* sr,
     /* ARP REQUEST & REPLY */
 	
     if (eth_type == ethertype_arp) {
-        fprintf(stderr, "********** ARP packet **********\n");
+        /*fprintf(stderr, "********** ARP packet **********\n");*/
         sr_handle_arppacket(sr, packet1, len, interface);
         return;
     }
     /* IP REQUEST & REPLY */
     else if (eth_type == ethertype_ip) {
-        fprintf(stderr, "********** IP packet **********\n");
+        /*fprintf(stderr, "********** IP packet **********\n");*/
         sr_handle_ippacket(sr, packet1, len, interface);
         return;
     }
@@ -141,12 +141,13 @@ void sr_handle_arppacket(struct sr_instance* sr,
     /* check the opcode to see if it is request or reply */
     unsigned short ar_op = ntohs(arp_hdr->ar_op);
     /* Get the interface and see if it matches the router */
-    struct sr_if *sr_iface = sr_get_interface(sr, interface);
+    /*struct sr_if *sr_iface = sr_get_interface(sr, interface);*/
+	struct sr_if *sr_iface = sr_get_router_if(sr, arp_hdr->ar_tip);
     if (sr_iface) {
         /* ********** ARP request ********** */
         /* Construct an arp reply and send it back */
         if (ar_op == arp_op_request) {
-            fprintf(stderr, "********** ARP REQUEST **********\n"); /* ar_op = 1 */
+            /*fprintf(stderr, "********** ARP REQUEST **********\n"); /* ar_op = 1 */
             /* Set the back-packet length */
             int packet_len = ARP_PACKET_LEN;
             uint8_t *arp_reply_hdr = (uint8_t *)malloc(packet_len);
@@ -159,14 +160,14 @@ void sr_handle_arppacket(struct sr_instance* sr,
 
             /* Send APR reply */
             sr_send_packet(sr, (sr_ethernet_hdr_t *)arp_reply_hdr, packet_len, sr_iface->name);
-            fprintf(stderr, "********** Sent ARP reply packet successfully!!\n");
+            /*fprintf(stderr, "********** Sent ARP reply packet successfully!!\n");*/
             free(arp_reply_hdr);
             return;
         }
         /* ********** ARP reply ********** */
         /* Cache it, go thru my request queue and send outstanding packets */
         else if (ar_op == arp_op_reply) {
-            fprintf(stderr, "********** ARP REPLY **********\n");  /* ar_op = 2 */
+            /*fprintf(stderr, "********** ARP REPLY **********\n");  /* ar_op = 2 */
             /* cache first, and send all the packets in the queue with ip->mac mapping!!! */
             handle_arpreply(arp_hdr, sr);
             return;
@@ -212,17 +213,17 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
     /* If the packet is sent to self, meaning the ip is sent to the router */
     if (sr_iface) {
-		printf("********** sent to self ***********\n");
+		/*printf("********** sent to self ***********\n");*/
         /* Check the protocol if it is icmp */
         if (ip_p == ip_protocol_icmp) {
             /* Get the icmp header */
-			fprintf(stderr, "********** icmp protocol ***********\n");
+			/*fprintf(stderr, "********** icmp protocol ***********\n");*/
             sr_icmp_hdr_t *icmp_hdr = get_icmp_hdr(packet);
 
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
-				fprintf(stderr, "********** icmp request ***********\n");
+				/*fprintf(stderr, "********** icmp request ***********\n");*/
                 int packet_len = ICMP_PACKET_LEN;
                 uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
 
@@ -237,7 +238,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
                 /* Send icmp echo reply */
                 sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_iface->name);
-                fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");
+                /*fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");*/
                 free(icmp_reply_hdr);
                 return;
             } else {
@@ -296,27 +297,29 @@ void sr_handle_ippacket(struct sr_instance* sr,
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
         if (dst_lpm) {
-			fprintf(stderr, "********* Get the longest prefix match *********\n");
+			/*fprintf(stderr, "********* Get the longest prefix match *********\n");*/
             /* check ARP cache */
             struct sr_if *out_if = sr_get_interface(sr, dst_lpm->interface);
             struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, dst_lpm->gw.s_addr);
             /* If hit, meaning the arp_entry is found */
             if (arp_entry) {
-				fprintf(stderr, "************ found the lpm router entry ***********\n");
+				/*fprintf(stderr, "************ found the lpm router entry ***********\n");*/
                 /* Send frame to next hop */
-                fprintf(stderr, "There is a match in the ARP cache!!\n");
+                /*fprintf(stderr, "There is a match in the ARP cache!!\n");*/
                 /* update the eth_hdr source and destination ethernet address */
                 /* use next_hop_ip->mac mapping in the entry to send the packet */
                 memcpy(eth_hdr->ether_shost, out_if->addr, ETHER_ADDR_LEN);
                 memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
                 sr_send_packet(sr, packet, len, out_if->name);
+				printf("Received IP header\n");
+				print_hdr_ip(ip_hdr);
                 /* free the entry */
                 free(arp_entry);
                 return;
             } else/* No Hit */ {
                 /* send an ARP request for the next-hop IP */
                 /* add the packet to the queue of packets waiting on this ARP request */
-                fprintf(stderr, "No match in the ARP cache:(\n");
+                /*fprintf(stderr, "No match in the ARP cache:(\n");*/
                 /* Add request to ARP queue*/
                 struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, out_if->name);
                 /* send ARP request, this is a broadcast */
@@ -531,7 +534,7 @@ void send_arp_req_packet_broadcast(struct sr_instance *sr, char * out_iface, uin
     assert(out_iface);
     assert(dest_ip);
     /* Get the interface from the router */
-	fprintf(stderr, "********* send arp request ***********\n");
+	/*fprintf(stderr, "********* send arp request ***********\n");*/
     struct sr_if *out_if = sr_get_interface(sr, out_iface);
 
     int packet_len = ARP_PACKET_LEN;
@@ -565,7 +568,7 @@ void send_arp_req_packet_broadcast(struct sr_instance *sr, char * out_iface, uin
     
     /* Send arp request packet */
     sr_send_packet(sr, arp_req_hdr, packet_len, out_if->name);
-	printf("************ send arp packet *************\n");
+	/*printf("************ send arp packet *************\n");*/
     free(arp_req_hdr);
     return;
 }

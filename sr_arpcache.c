@@ -26,7 +26,7 @@ function handle_arpreq(req):
 */
 void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     /* Get the ARP cache */
-	fprintf(stderr, "********* handle arp request **************\n");
+	/*fprintf(stderr, "********* handle arp request **************\n");*/
     struct sr_arpcache *cache = &(sr->cache);
 
     time_t now = time(0);
@@ -122,7 +122,10 @@ void handle_arpreply(sr_arp_hdr_t *arp_hdr, struct sr_instance* sr) {
 			/* Ge the interface from the router */
 			struct sr_if *out_if = sr_get_interface(sr, packet_walker->iface);
 			unsigned char *sender_mac = out_if->addr;
+			/* Change the sender mac address to be the router address */
             memcpy(eth_hdr->ether_shost, sender_mac, ETHER_ADDR_LEN);
+			/* Change the receiver mac address to be the arp source address, which is the sender of the arp reply */
+			memcpy(eth_hdr->ether_dhost, arp_hdr->ar_sha, ETHER_ADDR_LEN);
             sr_send_packet(sr, buf, length, out_if->name);
             packet_walker = packet_walker->next;
         }
