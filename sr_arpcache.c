@@ -28,7 +28,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     /* Get the ARP cache */
 	/*fprintf(stderr, "********* handle arp request **************\n");*/
     struct sr_arpcache *cache = &(sr->cache);
-printf("osososo\n");
+
     time_t now = time(0);
     if (difftime(now, arp_req->sent) >= 1.0) {
         if (arp_req->times_sent >= 5) {

@@ -140,10 +140,13 @@ void sr_handle_arppacket(struct sr_instance* sr,
 
     /* check the opcode to see if it is request or reply */
     unsigned short ar_op = ntohs(arp_hdr->ar_op);
-    /* Get the interface and see if it matches the router */
-    /*struct sr_if *sr_iface = sr_get_interface(sr, interface);*/
+    /* Get the connected interface in the router */
+    struct sr_if *sr_con_if = sr_get_interface(sr, interface);
+	/* Get the detination interface in the router */
 	struct sr_if *sr_iface = sr_get_router_if(sr, arp_hdr->ar_tip);
-    if (sr_iface) {
+	
+	/* If the connected interface exists, because arp has to be the connected interface */
+    if (sr_con_if) {
         /* ********** ARP request ********** */
         /* Construct an arp reply and send it back */
         if (ar_op == arp_op_request) {
@@ -153,14 +156,13 @@ void sr_handle_arppacket(struct sr_instance* sr,
             uint8_t *arp_reply_hdr = (uint8_t *)malloc(packet_len);
 
             /* Create ethernet header */
-            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)arp_reply_hdr, sr_iface);
+            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)arp_reply_hdr, sr_con_if);
 
             /* Create arp header */
-            create_back_arp_hdr(arp_hdr, (sr_arp_hdr_t *)((unsigned char *)arp_reply_hdr+ETHER_PACKET_LEN), sr_iface);
+            create_back_arp_hdr(arp_hdr, (sr_arp_hdr_t *)((unsigned char *)arp_reply_hdr+ETHER_PACKET_LEN), sr_con_if);
 
             /* Send APR reply */
-            sr_send_packet(sr, (sr_ethernet_hdr_t *)arp_reply_hdr, packet_len, sr_iface->name);
-            /*fprintf(stderr, "********** Sent ARP reply packet successfully!!\n");*/
+            sr_send_packet(sr, (sr_ethernet_hdr_t *)arp_reply_hdr, packet_len, sr_con_if->name);
             free(arp_reply_hdr);
             return;
         }
@@ -205,8 +207,10 @@ void sr_handle_ippacket(struct sr_instance* sr,
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
 
-    /* Get the interface on the router */
+    /* Get the destination interface on the router */
 	struct sr_if *sr_iface = sr_get_router_if(sr, ip_hdr->ip_dst);
+	/* Get the connected interface on the router */
+	struct sr_if *sr_con_if = sr_get_interface(sr, interface);
 
     /* Get the protocol from IP */
     uint8_t ip_p = ip_hdr->ip_p;
@@ -223,24 +227,24 @@ void sr_handle_ippacket(struct sr_instance* sr,
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
 				/* Check if it is in the ARP cache */
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, sr_iface->ip);
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
 				/* If hit, meaning the arp mapping has been cached */
 				if (arp_entry != NULL) {
 					/* We need to send the icmp echo reply */
 					int packet_len = ICMP_PACKET_LEN;
 		            uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
-printf("hohohohoho\n");
+
 		            /* Create ethernet header */
-		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_iface);
+		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_con_if);
 
 		            /* Create ip header */
-		            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_reply_hdr+ETHER_PACKET_LEN));
+		            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((unsigned char *)icmp_reply_hdr+ETHER_PACKET_LEN));
 
 		            /* Create icmp header */
-		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((char *)icmp_reply_hdr+IP_PACKET_LEN));
+		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((unsigned char *)icmp_reply_hdr+IP_PACKET_LEN));
 
 		            /* Send icmp echo reply */
-		            sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_iface->name);
+		            sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_con_if->name);
 		            /*fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");*/
 					print_hdrs(icmp_reply_hdr, packet_len);
 		            free(icmp_reply_hdr);
@@ -251,10 +255,9 @@ printf("hohohohoho\n");
 					/* Add request to the ARP queue */
 					/* Here I should add the source address since it should be a sent-back ICMP */
 					icmp_hdr->icmp_type = 0;
-					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, packet, len, sr_iface->name);
+					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, packet, len, sr_con_if->name);
 					/* Send ARP request, which is a broadcast */
 					handle_arpreq(arp_req, sr);
-printf("hahaha11111111111\n");
 					return;
 				}
 
@@ -318,7 +321,7 @@ printf("hahaha11111111111\n");
 			/*fprintf(stderr, "********* Get the longest prefix match *********\n");*/
             /* check ARP cache */
             struct sr_if *out_if = sr_get_interface(sr, dst_lpm->interface);
-            struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, dst_lpm->gw.s_addr);
+            struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_dst);
             /* If hit, meaning the arp_entry is found */
             if (arp_entry) {
 				/*fprintf(stderr, "************ found the lpm router entry ***********\n");*/
@@ -465,11 +468,12 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
     new_ip_hdr->ip_off = ip_hdr->ip_off;        /* fragment offset field */
     new_ip_hdr->ip_ttl = 100;                    /* time to live */
     new_ip_hdr->ip_p = ip_hdr->ip_p;            /* protocol */
-    /* do we need to check the checksum??? */
-    new_ip_hdr->ip_sum = ip_hdr->ip_sum;        /* checksum */
     /* source and destination should be altered */
     new_ip_hdr->ip_src = ip_hdr->ip_dst;        /* source address */
     new_ip_hdr->ip_dst = ip_hdr->ip_src;        /* dest address */
+	new_ip_hdr->ip_sum = 0;
+	uint16_t new_ip_sum = cksum(new_ip_hdr, sizeof(sr_ip_hdr_t));
+	new_ip_hdr->ip_sum = new_ip_sum;			/* checksum */
     return;
 }
 
@@ -483,7 +487,9 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
     /* code and checksum should be the same */
     new_icmp_hdr->icmp_code = icmp_hdr->icmp_code;
     /* do we need to check the checksum??? */
-    new_icmp_hdr->icmp_sum = icmp_hdr->icmp_sum;
+    new_icmp_hdr->icmp_sum = 0;
+	uint16_t new_cksum = cksum(new_icmp_hdr, sizeof(sr_icmp_hdr_t));
+	new_icmp_hdr->icmp_sum = new_cksum;
     return;
 }
 
