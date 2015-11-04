@@ -128,9 +128,17 @@ void sr_handle_arppacket(struct sr_instance* sr,
 
     /* Get ethernet header */
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)get_eth_hdr(packet);
+	if (eth_hdr == NULL) {
+		printf("ethernet header NULL!!!\n");
+		return;
+	}
 
     /* Get arp header */
     sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)get_arp_hdr(packet);
+	if (arp_hdr == NULL) {
+		printf("arp header NULL!!!\n");
+		return;
+	}
 
     /* Check the arp packet minimum length */
     if (!check_min_length(len, ARP_PACKET_LEN)) {
@@ -200,9 +208,17 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
     /* Get ethernet header */
     sr_ethernet_hdr_t *eth_hdr = get_eth_hdr(packet);
+	if (eth_hdr == NULL) {
+		printf("ethernet header NULL!!!\n");
+		return;
+	}
 
     /* Get ip header */
     sr_ip_hdr_t *ip_hdr = get_ip_hdr(packet);
+	if (ip_hdr == NULL) {
+		printf("ip header NULL!!!\n");
+		return;
+	}
 
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
@@ -227,7 +243,10 @@ void sr_handle_ippacket(struct sr_instance* sr,
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
 				/* Check if it is in the ARP cache */
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
+				uint32_t temp = ip_hdr->ip_src;
+				ip_hdr->ip_src = ip_hdr->ip_dst;
+				ip_hdr->ip_dst = temp;
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_dst);
 				/* If hit, meaning the arp mapping has been cached */
 				if (arp_entry != NULL) {
 					/* We need to send the icmp echo reply */
@@ -255,13 +274,12 @@ void sr_handle_ippacket(struct sr_instance* sr,
 					/* Add request to the ARP queue */
 					/* Here I should add the source address since it should be a sent-back ICMP */
 					icmp_hdr->icmp_type = 0;
-					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, packet, len, sr_con_if->name);
+					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, sr_con_if->name);
 					/* Send ARP request, which is a broadcast */
 					handle_arpreq(arp_req, sr);
 					return;
 				}
 
-                
             } else {
                 fprintf(stderr, "Not an ICMP request!\n");
                 return;
@@ -380,7 +398,7 @@ sr_ethernet_hdr_t *get_eth_hdr(uint8_t *packet) {
     sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)(packet);
     if (!eth_hdr) {
         fprintf(stderr, "Failed to get the ethernet header!\n");
-        return 0;
+        return NULL;
     } 
     return eth_hdr;
 }
@@ -392,7 +410,7 @@ sr_arp_hdr_t * get_arp_hdr(uint8_t *packet) {
     sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)((unsigned char *)packet + ETHER_PACKET_LEN);
     if (!arp_hdr) {
         fprintf(stderr, "Failed to get arp header!\n");
-        return 0;
+        return NULL;
     } 
     return arp_hdr;
 }
@@ -404,7 +422,7 @@ sr_ip_hdr_t *get_ip_hdr(uint8_t *packet) {
     sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)((unsigned char *)packet + ETHER_PACKET_LEN);
     if (!ip_hdr) {
         fprintf(stderr, "Failed to get ip header!\n");
-        return 0;
+        return NULL;
     }
     return ip_hdr;
 }
@@ -416,7 +434,7 @@ sr_icmp_hdr_t *get_icmp_hdr(uint8_t *packet) {
     sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)((unsigned char *)packet + IP_PACKET_LEN);
     if (!icmp_hdr) {
         fprintf(stderr, "Failed to get icmp header!\n");
-        return 0;
+        return NULL;
     }
     return icmp_hdr;
 }
@@ -462,11 +480,14 @@ void create_back_arp_hdr(sr_arp_hdr_t *arp_hdr, sr_arp_hdr_t *new_arp_hdr, struc
 void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
     assert(ip_hdr);
     assert(new_ip_hdr);
+	printf("ip hdr coooooooooooooooooooooming!!!!\n");
+	new_ip_hdr->ip_hl = ip_hdr->ip_hl;			/* header length */
+	new_ip_hdr->ip_v = ip_hdr->ip_v; 			/* header version */
     new_ip_hdr->ip_tos = ip_hdr->ip_tos;        /* type of service */
     new_ip_hdr->ip_len = ip_hdr->ip_len;        /* total length */
     new_ip_hdr->ip_id = ip_hdr->ip_id;          /* identification */
     new_ip_hdr->ip_off = ip_hdr->ip_off;        /* fragment offset field */
-    new_ip_hdr->ip_ttl = 100;                    /* time to live */
+    new_ip_hdr->ip_ttl = 64;                    /* time to live */
     new_ip_hdr->ip_p = ip_hdr->ip_p;            /* protocol */
     /* source and destination should be altered */
     new_ip_hdr->ip_src = ip_hdr->ip_dst;        /* source address */
@@ -482,6 +503,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
 void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
     assert(icmp_hdr);
     assert(new_icmp_hdr);
+	printf("icmp hdr coooooooooooooooooooooooooming!!!\n");
     /* here we construct a echo reply icmp */
     new_icmp_hdr->icmp_type = 0;
     /* code and checksum should be the same */
@@ -490,6 +512,7 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
     new_icmp_hdr->icmp_sum = 0;
 	uint16_t new_cksum = cksum(new_icmp_hdr, sizeof(sr_icmp_hdr_t));
 	new_icmp_hdr->icmp_sum = new_cksum;
+	print_hdr_icmp(new_icmp_hdr);
     return;
 }
 
@@ -498,15 +521,17 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
 void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint8_t icmp_type, uint8_t icmp_code) {
     assert(icmp_t3_hdr);
     /* type here should be 3 actually */
-    icmp_t3_hdr->icmp_type = icmp_type;
+	printf("icmp t3 hdr cooooooooooooooooooooooooooming!!!!\n");
+    icmp_t3_hdr->icmp_type = htons(icmp_type);
     /* get the icmp code from the input */
-    icmp_t3_hdr->icmp_code = icmp_code;
+    icmp_t3_hdr->icmp_code = htons(icmp_code);
     icmp_t3_hdr->unused = 0;
-    icmp_t3_hdr->next_mtu = 1500;
+    icmp_t3_hdr->next_mtu = 0;
     memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
 	icmp_t3_hdr->icmp_sum = 0;
     uint16_t checksum = cksum(icmp_t3_hdr, sizeof(sr_icmp_t3_hdr_t));
     icmp_t3_hdr->icmp_sum = checksum;
+	print_hdr_icmp(icmp_t3_hdr);
     return;
 }
 
