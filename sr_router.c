@@ -231,6 +231,13 @@ void sr_handle_ippacket(struct sr_instance* sr,
     /* Get the protocol from IP */
     uint8_t ip_p = ip_hdr->ip_p;
 
+	/* decrement ttl */
+	ip_hdr->ip_ttl--;
+    /* recompute the packet checksum over the modified header */
+    ip_hdr->ip_sum = 0;
+	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+	ip_hdr->ip_sum = new_ip_sum;
+
     /* If the packet is sent to self, meaning the ip is sent to the router */
     if (sr_iface) {
         /* Check the protocol if it is icmp */
@@ -243,16 +250,13 @@ void sr_handle_ippacket(struct sr_instance* sr,
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
 				/* Check if it is in the ARP cache */
-				uint32_t temp = ip_hdr->ip_src;
-				ip_hdr->ip_src = ip_hdr->ip_dst;
-				ip_hdr->ip_dst = temp;
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_dst);
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
 				/* If hit, meaning the arp mapping has been cached */
 				if (arp_entry != NULL) {
 					/* We need to send the icmp echo reply */
 					int packet_len = ICMP_PACKET_LEN;
 		            uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
-
+printf("11111111111111111111111111\n");
 		            /* Create ethernet header */
 		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_con_if);
 
@@ -273,9 +277,14 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				else {
 					/* Add request to the ARP queue */
 					/* Here I should add the source address since it should be a sent-back ICMP */
+					/* Swap the source and destination address since it is sent to the self */
+					uint32_t temp = ip_hdr->ip_src;
+					ip_hdr->ip_src = ip_hdr->ip_dst;
+					ip_hdr->ip_dst = temp;
 					icmp_hdr->icmp_type = 0;
 					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, sr_con_if->name);
 					/* Send ARP request, which is a broadcast */
+printf("22222222222222222222222222222\n");
 					handle_arpreq(arp_req, sr);
 					return;
 				}
@@ -326,12 +335,6 @@ void sr_handle_ippacket(struct sr_instance* sr,
             fprintf(stderr, "CHECKSUM FAILED!!\n");
             return;
         }
-        /* decrement the ttl by 1 */
-        ip_hdr->ip_ttl--;
-        /* recompute the packet checksum over the modified header */
-        ip_hdr->ip_sum = 0;
-		uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-		ip_hdr->ip_sum = new_ip_sum;
         /* Do LPM on the routing table */
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
