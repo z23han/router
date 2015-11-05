@@ -264,25 +264,32 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				/* If hit, meaning the arp mapping has been cached */
 				if (arp_entry != NULL) {
 					/* We need to send the icmp echo reply */
-					int packet_len = len;
-		            uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
-printf("========================\n");
-print_hdrs(packet, len);
-printf("-----------------------\n");
-		            /* Create ethernet header */
-		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_con_if);
+		            /* Modify ethernet header */
+					memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
+    				memcpy(eth_hdr->ether_shost, sr_con_if->addr, ETHER_ADDR_LEN);
 
-		            /* Create ip header */
-		            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((unsigned char *)icmp_reply_hdr+ETHER_PACKET_LEN));
+		            /* Modify ip header */
+    				ip_hdr->ip_off = htons(0b0100000000000000);        /* fragment offset field */
+    				ip_hdr->ip_ttl = 100;                    			/* time to live */
+    				/* source and destination should be altered */
+					uint32_t temp = ip_hdr->ip_src;
+    				ip_hdr->ip_src = ip_hdr->ip_dst;        /* source address */
+    				ip_hdr->ip_dst = temp;        			/* dest address */
+					ip_hdr->ip_sum = 0;
+					uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+					ip_hdr->ip_sum = new_ip_sum;			/* checksum */
 
-		            /* Create icmp header */
-		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((unsigned char *)icmp_reply_hdr+IP_PACKET_LEN), len);
+		            /* Modify icmp header */
+					unsigned int icmp_whole_size = len - IP_PACKET_LEN;
+    				icmp_hdr->icmp_type = 0;
+    				/* code and checksum should be the same */
+    				icmp_hdr->icmp_code = 0;
+    				/* we need to check the checksum */
+    				icmp_hdr->icmp_sum = 0;
+    				icmp_hdr->icmp_sum = cksum(icmp_hdr, icmp_whole_size);
 
 		            /* Send icmp echo reply */
-		            sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_con_if->name);
-		            /*fprintf(stderr, "********** Sent ICMP reply packet successfully!!\n");*/
-					print_hdrs(icmp_reply_hdr, packet_len);
-		            free(icmp_reply_hdr);
+		            sr_send_packet(sr, packet, len, sr_con_if->name);
 		            return;
 				}
 				/* Else no hit, we cache it to the queue and send arp request */ 
@@ -352,7 +359,6 @@ printf("-----------------------\n");
             if (arp_entry) {
 				/*fprintf(stderr, "************ found the lpm router entry ***********\n");*/
                 /* Send frame to next hop */
-                /*fprintf(stderr, "There is a match in the ARP cache!!\n");*/
                 /* update the eth_hdr source and destination ethernet address */
                 /* use next_hop_ip->mac mapping in the entry to send the packet */
                 memcpy(eth_hdr->ether_shost, out_if->addr, ETHER_ADDR_LEN);
@@ -366,11 +372,9 @@ printf("-----------------------\n");
             } else/* No Hit */ {
                 /* send an ARP request for the next-hop IP */
                 /* add the packet to the queue of packets waiting on this ARP request */
-                /*fprintf(stderr, "No match in the ARP cache:(\n");*/
                 /* Add request to ARP queue*/
                 struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, out_if->name);
                 /* send ARP request, this is a broadcast */
-print_hdrs(packet, len);
                 handle_arpreq(arp_req, sr);
                 return;
             }
@@ -517,7 +521,7 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr, unsig
 	unsigned int icmp_whole_size = len - IP_PACKET_LEN;
     new_icmp_hdr->icmp_type = 0;
     /* code and checksum should be the same */
-    new_icmp_hdr->icmp_code = icmp_hdr->icmp_code;
+    new_icmp_hdr->icmp_code = 0;
     /* do we need to check the checksum??? */
     new_icmp_hdr->icmp_sum = 0;
     memcpy(new_icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_whole_size-sizeof(sr_icmp_hdr_t));

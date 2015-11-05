@@ -34,7 +34,6 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
         if (arp_req->times_sent >= 5) {
             /* Get a list of packets on the queue */
             struct sr_packet *packet_walker = arp_req->packets;
-
             while (packet_walker != NULL) {
                 /* Send icmp host unreachable */
                 /* Get the interface of the router */
