@@ -520,8 +520,8 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr, unsig
     new_icmp_hdr->icmp_code = icmp_hdr->icmp_code;
     /* do we need to check the checksum??? */
     new_icmp_hdr->icmp_sum = 0;
-	uint16_t new_cksum = cksum(new_icmp_hdr, icmp_whole_size);
-	new_icmp_hdr->icmp_sum = new_cksum;
+    memcpy(new_icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_whole_size-sizeof(sr_icmp_hdr_t));
+    new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, icmp_whole_size);
 	print_hdr_icmp(new_icmp_hdr);
     return;
 }
