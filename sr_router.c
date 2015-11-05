@@ -220,6 +220,23 @@ void sr_handle_ippacket(struct sr_instance* sr,
 		return;
 	}
 
+	/* Before doing ttl decrement, check checksum */
+	uint16_t old_ip_sum = ip_hdr->ip_sum;
+	ip_hdr->ip_sum = 0;
+	
+    if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), old_ip_sum)) {
+        fprintf(stderr, "CHECKSUM FAILED!!\n");
+        return;
+    }
+
+	/* Do ttl-1, update checksum again */
+	/* decrement ttl */
+	ip_hdr->ip_ttl--;
+	/* recompute the packet checksum over the modified header */
+	ip_hdr->ip_sum = 0;
+	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+	ip_hdr->ip_sum = new_ip_sum;
+
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
 
@@ -230,13 +247,6 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
     /* Get the protocol from IP */
     uint8_t ip_p = ip_hdr->ip_p;
-
-	/* decrement ttl */
-	ip_hdr->ip_ttl--;
-    /* recompute the packet checksum over the modified header */
-    ip_hdr->ip_sum = 0;
-	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-	ip_hdr->ip_sum = new_ip_sum;
 
     /* If the packet is sent to self, meaning the ip is sent to the router */
     if (sr_iface) {
@@ -254,9 +264,11 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				/* If hit, meaning the arp mapping has been cached */
 				if (arp_entry != NULL) {
 					/* We need to send the icmp echo reply */
-					int packet_len = ICMP_PACKET_LEN;
+					int packet_len = len;
 		            uint8_t *icmp_reply_hdr = (uint8_t *)malloc(packet_len);
-printf("11111111111111111111111111\n");
+printf("========================\n");
+print_hdrs(packet, len);
+printf("-----------------------\n");
 		            /* Create ethernet header */
 		            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_reply_hdr, sr_con_if);
 
@@ -264,7 +276,7 @@ printf("11111111111111111111111111\n");
 		            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((unsigned char *)icmp_reply_hdr+ETHER_PACKET_LEN));
 
 		            /* Create icmp header */
-		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((unsigned char *)icmp_reply_hdr+IP_PACKET_LEN));
+		            create_icmp_hdr(icmp_hdr, (sr_icmp_hdr_t *)((unsigned char *)icmp_reply_hdr+IP_PACKET_LEN), len);
 
 		            /* Send icmp echo reply */
 		            sr_send_packet(sr, icmp_reply_hdr, packet_len, sr_con_if->name);
@@ -284,7 +296,6 @@ printf("11111111111111111111111111\n");
 					icmp_hdr->icmp_type = 0;
 					struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, sr_con_if->name);
 					/* Send ARP request, which is a broadcast */
-printf("22222222222222222222222222222\n");
 					handle_arpreq(arp_req, sr);
 					return;
 				}
@@ -322,19 +333,13 @@ printf("22222222222222222222222222222\n");
     /* Else Check the routing table, perfomr LPM */
     else {
         /* Sanity-check the packet */
+
         /* minimum length */
         if (!check_min_length(len, IP_PACKET_LEN)) {
             fprintf(stderr, "The packet length is not enough:(\n");
             return;
         }
-        /* checksum */
-		/* Set the checksum to be 0 after recording the checksum */
-		uint16_t old_ip_sum = ip_hdr->ip_sum;
-		ip_hdr->ip_sum = 0;
-        if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), old_ip_sum)) {
-            fprintf(stderr, "CHECKSUM FAILED!!\n");
-            return;
-        }
+		
         /* Do LPM on the routing table */
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
@@ -365,6 +370,7 @@ printf("22222222222222222222222222222\n");
                 /* Add request to ARP queue*/
                 struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, out_if->name);
                 /* send ARP request, this is a broadcast */
+print_hdrs(packet, len);
                 handle_arpreq(arp_req, sr);
                 return;
             }
@@ -489,7 +495,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
     new_ip_hdr->ip_tos = ip_hdr->ip_tos;        /* type of service */
     new_ip_hdr->ip_len = ip_hdr->ip_len;        /* total length */
     new_ip_hdr->ip_id = ip_hdr->ip_id;          /* identification */
-    new_ip_hdr->ip_off = ip_hdr->ip_off;        /* fragment offset field */
+    new_ip_hdr->ip_off = htons(0b0100000000000000);        /* fragment offset field */
     new_ip_hdr->ip_ttl = 64;                    /* time to live */
     new_ip_hdr->ip_p = ip_hdr->ip_p;            /* protocol */
     /* source and destination should be altered */
@@ -503,17 +509,18 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
 
 
 /* Create icmp header */
-void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr) {
+void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr, unsigned int len) {
     assert(icmp_hdr);
     assert(new_icmp_hdr);
 	printf("icmp hdr coooooooooooooooooooooooooming!!!\n");
     /* here we construct a echo reply icmp */
+	unsigned int icmp_whole_size = len - IP_PACKET_LEN;
     new_icmp_hdr->icmp_type = 0;
     /* code and checksum should be the same */
     new_icmp_hdr->icmp_code = icmp_hdr->icmp_code;
     /* do we need to check the checksum??? */
     new_icmp_hdr->icmp_sum = 0;
-	uint16_t new_cksum = cksum(new_icmp_hdr, sizeof(sr_icmp_hdr_t));
+	uint16_t new_cksum = cksum(new_icmp_hdr, icmp_whole_size);
 	new_icmp_hdr->icmp_sum = new_cksum;
 	print_hdr_icmp(new_icmp_hdr);
     return;

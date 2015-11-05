@@ -65,9 +65,9 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 new_ip_hdr->ip_tos = ip_hdr->ip_tos;
                 new_ip_hdr->ip_len = ip_hdr->ip_len;
                 new_ip_hdr->ip_id = ip_hdr->ip_id;
-                new_ip_hdr->ip_off = ip_hdr->ip_off;
-                new_ip_hdr->ip_ttl = ip_hdr->ip_ttl;
-                new_ip_hdr->ip_p = htons(ip_protocol_icmp);
+                new_ip_hdr->ip_off = htons(0b0100000000000000);
+                new_ip_hdr->ip_ttl = 64;
+                new_ip_hdr->ip_p = ip_protocol_icmp;
                 new_ip_hdr->ip_src = sender_ip;
                 new_ip_hdr->ip_dst = receiver_ip;
 				new_ip_hdr->ip_sum = 0;
@@ -130,6 +130,7 @@ void handle_arpreply(sr_arp_hdr_t *arp_hdr, struct sr_instance* sr) {
             memcpy(eth_hdr->ether_shost, sender_mac, ETHER_ADDR_LEN);
 			/* Change the receiver mac address to be the arp source address, which is the sender of the arp reply */
 			memcpy(eth_hdr->ether_dhost, arp_hdr->ar_sha, ETHER_ADDR_LEN);
+			print_hdrs(buf, length);
             sr_send_packet(sr, buf, length, out_if->name);
             packet_walker = packet_walker->next;
         }
