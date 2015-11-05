@@ -28,10 +28,10 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     /* Get the ARP cache */
 	/*fprintf(stderr, "********* handle arp request **************\n");*/
     struct sr_arpcache *cache = &(sr->cache);
-
     time_t now = time(0);
     if (difftime(now, arp_req->sent) >= 1.0) {
         if (arp_req->times_sent >= 5) {
+printf("hahhaha\n");
             /* Get a list of packets on the queue */
             struct sr_packet *packet_walker = arp_req->packets;
             while (packet_walker != NULL) {
@@ -77,20 +77,24 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 new_icmp_hdr->icmp_code = 1;
                 new_icmp_hdr->unused = 0;
                 new_icmp_hdr->next_mtu = 0;
-                memcpy(new_icmp_hdr->data, new_ip_hdr, ICMP_DATA_SIZE);
+                memcpy(new_icmp_hdr->data, ip_hdr, ICMP_DATA_SIZE);
 				new_icmp_hdr->icmp_sum = 0;
                 new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
 
                 /* Send icmp type 3 packet */
                 sr_send_packet(sr, icmp_t3_hdr, packet_len, out_if->name);
+				printf("---------------- Host unreachable -----------------\n");
                 free(icmp_t3_hdr);
+				packet_walker = packet_walker->next;
             }
+printf("hihihihihihihi\n");
             sr_arpreq_destroy(cache, arp_req);
         } else {
             /* send arp request */
             send_arp_req_packet_broadcast(sr, (arp_req->packets)->iface, arp_req->ip);
             arp_req->sent = now; /* current time */
             arp_req->times_sent++;
+			printf("arp_req->times_sent : %d\n", arp_req->times_sent);
         }
     }
     return;
@@ -153,13 +157,14 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
     /* Fill this in */
     struct sr_arpreq *arp_req = sr->cache.requests;
     struct sr_arpreq *arp_req_next;
-    while (arp_req) {
-        handle_arpreq(arp_req, sr);
-		if (arp_req->next) {
+    while (arp_req != NULL) {
+		if (arp_req->next != NULL) {
 			arp_req_next = arp_req->next;
 		}
-        arp_req = arp_req_next;
-        arp_req_next = arp_req_next->next;
+        handle_arpreq(arp_req, sr);
+		if (arp_req_next != NULL) {
+			arp_req = arp_req_next;
+		}
     }
     return;
 }

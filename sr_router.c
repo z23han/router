@@ -93,15 +93,12 @@ void sr_handlepacket(struct sr_instance* sr,
     uint16_t eth_type = ethertype(packet1);
 
     /* ARP REQUEST & REPLY */
-	
     if (eth_type == ethertype_arp) {
-        /*fprintf(stderr, "********** ARP packet **********\n");*/
         sr_handle_arppacket(sr, packet1, len, interface);
         return;
     }
     /* IP REQUEST & REPLY */
     else if (eth_type == ethertype_ip) {
-        /*fprintf(stderr, "********** IP packet **********\n");*/
         sr_handle_ippacket(sr, packet1, len, interface);
         return;
     }
@@ -316,6 +313,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
         else {
             fprintf(stderr, "*** -> Received TCP/UDP!\n");
             /* Send ICMP port unreachable */
+
             int packet_len = ICMP_T3_PACKET_LEN;
             uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
@@ -380,6 +378,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
             }
         } else /* if not matched */ {
             /* Send ICMP net unreachable */
+			printf("--------------- Net Unreachable ---------------\n");
             int packet_len = ICMP_T3_PACKET_LEN;
             uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
@@ -536,9 +535,9 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
     assert(icmp_t3_hdr);
     /* type here should be 3 actually */
 	printf("icmp t3 hdr cooooooooooooooooooooooooooming!!!!\n");
-    icmp_t3_hdr->icmp_type = htons(icmp_type);
+    icmp_t3_hdr->icmp_type = icmp_type;
     /* get the icmp code from the input */
-    icmp_t3_hdr->icmp_code = htons(icmp_code);
+    icmp_t3_hdr->icmp_code = icmp_code;
     icmp_t3_hdr->unused = 0;
     icmp_t3_hdr->next_mtu = 0;
     memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
@@ -599,7 +598,6 @@ void send_arp_req_packet_broadcast(struct sr_instance *sr, char * out_iface, uin
     /* Get the interface from the router */
 	/*fprintf(stderr, "********* send arp request ***********\n");*/
     struct sr_if *out_if = sr_get_interface(sr, out_iface);
-
     int packet_len = ARP_PACKET_LEN;
     uint8_t *arp_req_hdr = (uint8_t *)malloc(packet_len);
     /* Create ethernet header */
