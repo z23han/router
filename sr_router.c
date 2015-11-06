@@ -318,10 +318,12 @@ void sr_handle_ippacket(struct sr_instance* sr,
             uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
             /* Create ethernet header */
-            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_iface);
+            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
             /* Create ip header */
             create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN));
+			/* Should update source address to be interface address */
+			((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip;
 
             /* Send icmp type 3 port unreachable */
             /* Create icmp port unreachable packet */
@@ -329,7 +331,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
             create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 3);
 
             /* Send icmp type 3 packet */
-            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_iface->name);
+            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
 
             free(icmp_t3_hdr);
             return;
@@ -347,12 +349,13 @@ void sr_handle_ippacket(struct sr_instance* sr,
 		
         /* Do LPM on the routing table */
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
-        struct sr_rt *dst_lpm = sr_lpm(sr, ip_hdr->ip_dst);
-        if (dst_lpm) {
+        struct sr_rt *longest_pref_match = sr_lpm(sr, ip_hdr->ip_dst);
+        if (longest_pref_match) {
+printf("hahaha\n");
 			/*fprintf(stderr, "********* Get the longest prefix match *********\n");*/
             /* check ARP cache */
-            struct sr_if *out_if = sr_get_interface(sr, dst_lpm->interface);
-            struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_dst);
+            struct sr_if *out_if = sr_get_interface(sr, longest_pref_match->interface);
+            struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, longest_pref_match->gw.s_addr); /* ip_hdr->ip_dst */
             /* If hit, meaning the arp_entry is found */
             if (arp_entry) {
 				/*fprintf(stderr, "************ found the lpm router entry ***********\n");*/
@@ -383,7 +386,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
             uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
             /* Create ethernet header */
-            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_iface);
+            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
             /* Create ip header */
             create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN));
@@ -393,7 +396,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
             create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
 
             /* Send icmp type 3 packet */
-            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_iface->name);
+            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
 
             free(icmp_t3_hdr);
             return;
@@ -577,10 +580,11 @@ struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
     struct sr_rt *routing_table = sr->routing_table;
     int len = 0;
     struct sr_rt *lpm_rt = sr->routing_table;
+
     while (routing_table) {
         if ((ip_dst & routing_table->mask.s_addr) == (routing_table->dest.s_addr & routing_table->mask.s_addr)) {
-            if (len < routing_table->mask.s_addr) {
-                len = routing_table->mask.s_addr;
+            if (len < routing_table->dest.s_addr & routing_table->mask.s_addr) {
+                len = routing_table->dest.s_addr & routing_table->mask.s_addr;
                 lpm_rt = routing_table;
             }
         }

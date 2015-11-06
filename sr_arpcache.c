@@ -31,15 +31,16 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
     time_t now = time(0);
     if (difftime(now, arp_req->sent) >= 1.0) {
         if (arp_req->times_sent >= 5) {
-printf("hahhaha\n");
             /* Get a list of packets on the queue */
             struct sr_packet *packet_walker = arp_req->packets;
             while (packet_walker != NULL) {
                 /* Send icmp host unreachable */
                 /* Get the interface of the router */
                 struct sr_if *out_if = sr_get_interface(sr, packet_walker->iface);
+				if (out_if == NULL) {
+					return;
+				}
                 /* Collect the sender and receiver mac/ip addresses */
-
                 unsigned char *sender_mac = out_if->addr;
                 uint32_t sender_ip = out_if->ip;
                 /* get the packet frame in the waiting queue */
@@ -87,7 +88,6 @@ printf("hahhaha\n");
                 free(icmp_t3_hdr);
 				packet_walker = packet_walker->next;
             }
-printf("hihihihihihihi\n");
             sr_arpreq_destroy(cache, arp_req);
         } else {
             /* send arp request */
