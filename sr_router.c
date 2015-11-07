@@ -221,19 +221,12 @@ printf("handle ip packet start\n");
 	/* Before doing ttl decrement, check checksum */
 	uint16_t old_ip_sum = ip_hdr->ip_sum;
 	ip_hdr->ip_sum = 0;
-	
-    if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), old_ip_sum)) {
-        fprintf(stderr, "CHECKSUM FAILED!!\n");
-        return;
-    }
 
-	/* Do ttl-1, update checksum again */
-	/* decrement ttl */
-	ip_hdr->ip_ttl--;
-	/* recompute the packet checksum over the modified header */
-	ip_hdr->ip_sum = 0;
-	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-	ip_hdr->ip_sum = new_ip_sum;
+	if (!verify_checksum(ip_hdr, sizeof(sr_ip_hdr_t), old_ip_sum)) {
+		fprintf(stderr, "CHECKSUM FAILED!!\n");
+		return;
+	}
+	ip_hdr->ip_sum = old_ip_sum;
 
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
@@ -257,6 +250,14 @@ printf("handle ip packet start\n");
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
+				/* Do ttl-1, update checksum again */
+				/* decrement ttl */
+			 	ip_hdr->ip_ttl--;
+				/* recompute the packet checksum over the modified header */
+				ip_hdr->ip_sum = 0;
+				uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+				ip_hdr->ip_sum = new_ip_sum;
+
 				/* Check if it is in the ARP cache */
 				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
 				/* If hit, meaning the arp mapping has been cached */
@@ -314,30 +315,59 @@ printf("handle ip packet start\n");
         else {
             fprintf(stderr, "*** -> Received TCP/UDP!\n");
             /* Send ICMP port unreachable */
+			struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
+			if (arp_entry != NULL) {
+printf("arp cache hits\n");
+				int packet_len = ICMP_T3_PACKET_LEN;
+		        uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
-            int packet_len = ICMP_T3_PACKET_LEN;
-            uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
+		        /* Create ethernet header */
+		        create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
-            /* Create ethernet header */
-            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
+		        /* Create ip header */
+		        create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+				/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
 
-            /* Create ip header */
-            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
-			/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
+				/* Should update source address to be interface address */
+				/* ((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip; */
 
-			/* Should update source address to be interface address */
-			/* ((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip; */
+		        /* Send icmp type 3 port unreachable */
+		        /* Create icmp port unreachable packet */
+		        /* icmp_t3 type=3, code=3 */
+		        create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 3);
 
-            /* Send icmp type 3 port unreachable */
-            /* Create icmp port unreachable packet */
-            /* icmp_t3 type=3, code=3 */
-            create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 3);
+		        /* Send icmp type 3 packet */
+		        sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
 
-            /* Send icmp type 3 packet */
-            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
+		        free(icmp_t3_hdr);
+		        return;
+			} else {
+printf("arp cache miss\n");
+				
+				int packet_len = ICMP_T3_PACKET_LEN;
+		        uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
-            free(icmp_t3_hdr);
-            return;
+		        /* Create ethernet header */
+		        create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
+
+		        /* Create ip header */
+		        create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+				/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
+
+				/* Should update source address to be interface address */
+				/* ((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip; */
+
+		        /* Send icmp type 3 port unreachable */
+		        /* Create icmp port unreachable packet */
+		        /* icmp_t3 type=3, code=3 */
+		        create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 3);
+
+				struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, icmp_t3_hdr, packet_len, sr_con_if->name);
+				/* Send ARP request, which is a broadcast */
+				handle_arpreq(arp_req, sr);
+				return;
+			}
+            
         }
     }
     /* Else Check the routing table, perfomr LPM */
@@ -358,9 +388,14 @@ printf("routing table matches\n");
 			/*fprintf(stderr, "********* Get the longest prefix match *********\n");*/
             /* check ARP cache */
             struct sr_if *out_if = sr_get_interface(sr, longest_pref_match->interface);
-            struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, longest_pref_match->gw.s_addr); /* ip_hdr->ip_dst */
-            /* If hit, meaning the arp_entry is found */
+print_addr_ip_int(longest_pref_match->gw.s_addr);
+printf("look before\n");
+            struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, longest_pref_match->gw.s_addr); /* ip_hdr->ip_dst */
+printf("look after\n");            
+/* If hit, meaning the arp_entry is found */
             if (arp_entry) {
+
+printf("mac: %s\n", arp_entry->mac);
 				/*fprintf(stderr, "************ found the lpm router entry ***********\n");*/
                 /* Send frame to next hop */
                 /* update the eth_hdr source and destination ethernet address */
@@ -374,6 +409,7 @@ printf("routing table matches\n");
                 free(arp_entry);
                 return;
             } else/* No Hit */ {
+printf("cannot find host\n");
                 /* send an ARP request for the next-hop IP */
                 /* add the packet to the queue of packets waiting on this ARP request */
                 /* Add request to ARP queue*/
@@ -386,25 +422,53 @@ printf("routing table matches\n");
 printf("routing table not matches\n");
             /* Send ICMP net unreachable */
 			printf("--------------- Net Unreachable ---------------\n");
-            int packet_len = ICMP_T3_PACKET_LEN;
-            uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
+			struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
+			if (arp_entry) {
+				int packet_len = ICMP_T3_PACKET_LEN;
+		        uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
-            /* Create ethernet header */
-            create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
+		        /* Create ethernet header */
+		        create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
-            /* Create ip header */
-            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+		        /* Create ip header */
+		        create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
 
-            /* Create icmp net unreachable */
-            /* icmp_t3 type=3, code=0 */
-            create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
+		        /* Create icmp net unreachable */
+		        /* icmp_t3 type=3, code=0 */
+		        create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
 
-            /* Send icmp type 3 packet */
+		        /* Send icmp type 3 packet */
 printf("send back %s packet with fd %d \n", sr_con_if->name, sr->sockfd);
-            sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
+		        sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
 
-            free(icmp_t3_hdr);
-            return;
+		        free(icmp_t3_hdr);
+		        return;
+			} else {
+
+				int packet_len = ICMP_T3_PACKET_LEN;
+		        uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
+
+		        /* Create ethernet header */
+		        create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
+
+		        /* Create ip header */
+		        create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+				/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
+
+				/* Should update source address to be interface address */
+				/* ((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip; */
+
+		        /* Send icmp type 3 port unreachable */
+		        /* Create icmp net unreachable packet */
+		        /* icmp_t3 type=3, code=0 */
+		        create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
+
+				struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_src, icmp_t3_hdr, packet_len, sr_con_if->name);
+				/* Send ARP request, which is a broadcast */
+				handle_arpreq(arp_req, sr);
+				return;
+			}
+            
         }
     }
 
@@ -504,7 +568,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr, struct sr_
 	new_ip_hdr->ip_hl = ip_hdr->ip_hl;			/* header length */
 	new_ip_hdr->ip_v = ip_hdr->ip_v; 			/* header version */
     new_ip_hdr->ip_tos = ip_hdr->ip_tos;        /* type of service */
-    new_ip_hdr->ip_len = ip_hdr->ip_len;        /* total length */
+    new_ip_hdr->ip_len = htons(56); /* ip_hdr->ip_len;        /* total length */
     new_ip_hdr->ip_id = 0; /*ip_hdr->ip_id;*/          /* identification */
     new_ip_hdr->ip_off = htons(0b0100000000000000);        /* fragment offset field */
     new_ip_hdr->ip_ttl = 64;                    /* time to live */
@@ -513,7 +577,6 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr, struct sr_
     new_ip_hdr->ip_src =  sr_iface->ip;/* ip_hdr->ip_dst;  */      /* source address */
     new_ip_hdr->ip_dst = ip_hdr->ip_src;        /* dest address */
 	new_ip_hdr->ip_sum = 0;
-/*
 	uint16_t new_ip_sum = cksum(new_ip_hdr, sizeof(sr_ip_hdr_t));
 	new_ip_hdr->ip_sum = new_ip_sum;			/* checksum */
     return;
@@ -591,8 +654,9 @@ struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
 
     while (routing_table) {
         if ((ip_dst & routing_table->mask.s_addr) == (routing_table->dest.s_addr & routing_table->mask.s_addr)) {
-            if (len < routing_table->dest.s_addr & routing_table->mask.s_addr) {
-                len = routing_table->dest.s_addr & routing_table->mask.s_addr;
+printf("%l\n",routing_table->mask.s_addr);
+            if (len < routing_table->mask.s_addr) { /* routing_table->dest.s_addr & routing_table->mask.s_addr) { */
+                len = routing_table->mask.s_addr; /*& routing_table->mask.s_addr;*/
                 lpm_rt = routing_table;
             }
         }
