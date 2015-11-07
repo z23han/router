@@ -229,6 +229,7 @@ printf("handle ip packet start\n");
 	ip_hdr->ip_sum = old_ip_sum;
 
 	ip_hdr->ip_ttl--;
+
 	/* recompute the packet checksum over the modified header */
 	ip_hdr->ip_sum = 0;
 	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
@@ -241,6 +242,28 @@ printf("handle ip packet start\n");
 	struct sr_if *sr_iface = sr_get_router_if(sr, ip_hdr->ip_dst);
 	/* Get the connected interface on the router */
 	struct sr_if *sr_con_if = sr_get_interface(sr, interface);
+
+    /* Check the time exceeded condition, if ttl==0, we need to form icmp 11 and send back */
+    if (ip_hdr->ttl == 0) {
+        /* time exceeded message and icmp type 11 */
+        printf("TTL time exceeded\n");
+        int packet_len = ICMP_T3_PACKET_LEN;
+        uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
+
+        create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
+        /* Create ip header */
+        create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+
+        /* Send icmp type 11 time exceeded */
+        /* icmp_t3 type=11, code=0 */
+        create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 11, 0);
+
+        /* Send icmp type 11 packet */
+        sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
+
+        free(icmp_t3_hdr);
+        return;
+    }
 
     /* Get the protocol from IP */
     uint8_t ip_p = ip_hdr->ip_p;
