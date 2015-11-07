@@ -202,6 +202,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
     assert(sr);
     assert(packet);
     assert(interface);
+printf("handle ip packet start\n");
 
     /* Get ethernet header */
     sr_ethernet_hdr_t *eth_hdr = get_eth_hdr(packet);
@@ -321,9 +322,11 @@ void sr_handle_ippacket(struct sr_instance* sr,
             create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
             /* Create ip header */
-            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN));
+            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
+			/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
+
 			/* Should update source address to be interface address */
-			((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip;
+			/* ((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_dst = sr_iface->ip; */
 
             /* Send icmp type 3 port unreachable */
             /* Create icmp port unreachable packet */
@@ -340,7 +343,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
     /* Else Check the routing table, perfomr LPM */
     else {
         /* Sanity-check the packet */
-
+printf("Packet not for me, check routing table, perform LPM\n");
         /* minimum length */
         if (!check_min_length(len, IP_PACKET_LEN)) {
             fprintf(stderr, "The packet length is not enough:(\n");
@@ -351,7 +354,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
         /* Check the routing table and see if the incoming ip matches the routing table ip, and find LPM router entry */
         struct sr_rt *longest_pref_match = sr_lpm(sr, ip_hdr->ip_dst);
         if (longest_pref_match) {
-printf("hahaha\n");
+printf("routing table matches\n");
 			/*fprintf(stderr, "********* Get the longest prefix match *********\n");*/
             /* check ARP cache */
             struct sr_if *out_if = sr_get_interface(sr, longest_pref_match->interface);
@@ -380,6 +383,7 @@ printf("hahaha\n");
                 return;
             }
         } else /* if not matched */ {
+printf("routing table not matches\n");
             /* Send ICMP net unreachable */
 			printf("--------------- Net Unreachable ---------------\n");
             int packet_len = ICMP_T3_PACKET_LEN;
@@ -389,13 +393,14 @@ printf("hahaha\n");
             create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_con_if);
 
             /* Create ip header */
-            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN));
+            create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
 
             /* Create icmp net unreachable */
             /* icmp_t3 type=3, code=0 */
             create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
 
             /* Send icmp type 3 packet */
+printf("send back %s packet with fd %d \n", sr_con_if->name, sr->sockfd);
             sr_send_packet(sr, icmp_t3_hdr, packet_len, sr_con_if->name);
 
             free(icmp_t3_hdr);
@@ -492,7 +497,7 @@ void create_back_arp_hdr(sr_arp_hdr_t *arp_hdr, sr_arp_hdr_t *new_arp_hdr, struc
 
 
 /* Create echo ip header */
-void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
+void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr, struct sr_if *sr_iface) {
     assert(ip_hdr);
     assert(new_ip_hdr);
 	printf("ip hdr coooooooooooooooooooooming!!!!\n");
@@ -500,14 +505,15 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr) {
 	new_ip_hdr->ip_v = ip_hdr->ip_v; 			/* header version */
     new_ip_hdr->ip_tos = ip_hdr->ip_tos;        /* type of service */
     new_ip_hdr->ip_len = ip_hdr->ip_len;        /* total length */
-    new_ip_hdr->ip_id = ip_hdr->ip_id;          /* identification */
+    new_ip_hdr->ip_id = 0; /*ip_hdr->ip_id;*/          /* identification */
     new_ip_hdr->ip_off = htons(0b0100000000000000);        /* fragment offset field */
     new_ip_hdr->ip_ttl = 64;                    /* time to live */
-    new_ip_hdr->ip_p = ip_hdr->ip_p;            /* protocol */
+    new_ip_hdr->ip_p = ip_protocol_icmp;            /* protocol */
     /* source and destination should be altered */
-    new_ip_hdr->ip_src = ip_hdr->ip_dst;        /* source address */
+    new_ip_hdr->ip_src =  sr_iface->ip;/* ip_hdr->ip_dst;  */      /* source address */
     new_ip_hdr->ip_dst = ip_hdr->ip_src;        /* dest address */
 	new_ip_hdr->ip_sum = 0;
+/*
 	uint16_t new_ip_sum = cksum(new_ip_hdr, sizeof(sr_ip_hdr_t));
 	new_ip_hdr->ip_sum = new_ip_sum;			/* checksum */
     return;
@@ -543,10 +549,12 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
     icmp_t3_hdr->icmp_code = icmp_code;
     icmp_t3_hdr->unused = 0;
     icmp_t3_hdr->next_mtu = 0;
-    memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE);
+    memcpy(icmp_t3_hdr->data, ip_hdr, ICMP_DATA_SIZE); 
 	icmp_t3_hdr->icmp_sum = 0;
     uint16_t checksum = cksum(icmp_t3_hdr, sizeof(sr_icmp_t3_hdr_t));
     icmp_t3_hdr->icmp_sum = checksum;
+
+/*	memcpy(icmp_t3_hdr->data, ip_hdr, sizeof(sr_ip_hdr_t)); */ 
 	print_hdr_icmp(icmp_t3_hdr);
     return;
 }
@@ -578,8 +586,8 @@ int check_min_length(unsigned int len, unsigned int packet_len) {
 struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
     /* sr_rt is a linkedList until reaching the end */
     struct sr_rt *routing_table = sr->routing_table;
-    int len = 0;
-    struct sr_rt *lpm_rt = sr->routing_table;
+    uint32_t len = 0;
+    struct sr_rt *lpm_rt = NULL; /*sr->routing_table;*/
 
     while (routing_table) {
         if ((ip_dst & routing_table->mask.s_addr) == (routing_table->dest.s_addr & routing_table->mask.s_addr)) {
