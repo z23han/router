@@ -228,12 +228,6 @@ printf("handle ip packet start\n");
 	}
 	ip_hdr->ip_sum = old_ip_sum;
 
-	ip_hdr->ip_ttl--;
-	/* recompute the packet checksum over the modified header */
-	ip_hdr->ip_sum = 0;
-	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-	ip_hdr->ip_sum = new_ip_sum;
-
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
 
@@ -256,6 +250,14 @@ printf("handle ip packet start\n");
             /* Check if it is ICMP echo request */
             /* icmp_echo_req = 8 */
             if (icmp_hdr->icmp_type == 8) {
+				/* Do ttl-1, update checksum again */
+				/* decrement ttl */
+			 	ip_hdr->ip_ttl--;
+				/* recompute the packet checksum over the modified header */
+				ip_hdr->ip_sum = 0;
+				uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+				ip_hdr->ip_sum = new_ip_sum;
+
 				/* Check if it is in the ARP cache */
 				struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);
 				/* If hit, meaning the arp mapping has been cached */
