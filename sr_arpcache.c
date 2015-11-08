@@ -90,24 +90,26 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 memcpy(new_icmp_hdr->data, ip_hdr, ICMP_DATA_SIZE);
 				new_icmp_hdr->icmp_sum = 0;
                 new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
-
-				struct sr_arpreq *arp_req_1 = sr_arpcache_queuereq(cache, receiver_ip, icmp_t3_hdr, packet_len, longest_pref_match->interface);
-				handle_arpreq(arp_req_1, sr); 
-
+				
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(cache, receiver_ip);
+				if (arp_entry != NULL) {
+					sr_send_packet(sr, icmp_t3_hdr, packet_len, longest_pref_match->interface);
+					free(icmp_t3_hdr);
+				} else {
+					struct sr_arpreq *arp_req_1 = sr_arpcache_queuereq(cache, receiver_ip, icmp_t3_hdr, packet_len, longest_pref_match->interface);
+					handle_arpreq(arp_req_1, sr);
+				}
                 /* Send icmp type 3 packet */
          		/* sr_send_packet(sr, icmp_t3_hdr, packet_len, longest_pref_match->interface);
 				/* printf("---------------- Host unreachable -----------------\n"); */
-        		/* free(icmp_t3_hdr); */
 				packet_walker = packet_walker->next;
             }
-			printf("destroy cache entry\n");
             sr_arpreq_destroy(cache, arp_req); 
         } else {
             /* send arp request */
             send_arp_req_packet_broadcast(sr, (arp_req->packets)->iface, arp_req->ip);
             arp_req->sent = now; /* current time */
             arp_req->times_sent++;
-			printf("arp_req->times_sent : %d with IP: %d\n", arp_req->times_sent, arp_req->ip);
         }
     }
     return;
@@ -118,7 +120,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
 The ARP reply processing code should move entries from the ARP request queue to the ARP cache
  */
 void handle_arpreply(sr_arp_hdr_t *arp_hdr, struct sr_instance* sr) {
-printf("********** Received ARP reply starts\n");
+
     /* Get the ARP cache */
     struct sr_arpcache *cache = &(sr->cache);
     /* When servicing an arp reply that gives us an IP->MAC mapping, 
@@ -263,7 +265,6 @@ struct sr_arpreq *sr_arpcache_insert(struct sr_arpcache *cache,
                                      unsigned char *mac,
                                      uint32_t ip)
 {
-printf("insert starts\n");
     pthread_mutex_lock(&(cache->lock));
     
     struct sr_arpreq *req, *prev = NULL, *next = NULL; 
@@ -339,7 +340,6 @@ void sr_arpreq_destroy(struct sr_arpcache *cache, struct sr_arpreq *entry) {
     }
    
     pthread_mutex_unlock(&(cache->lock));
-  printf("end destroy\n");
 }
 
 /* Prints out the ARP table. */
