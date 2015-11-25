@@ -11,6 +11,7 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_rt.h"
+#include "sr_utils.h"
 
 
 /*
@@ -45,13 +46,13 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
 					return;
 				}
                 /* Collect the sender and receiver mac/ip addresses */
-                unsigned char *sender_mac = out_if->addr;
-                uint32_t sender_ip = out_if->ip;
+                /*unsigned char *sender_mac = out_if->addr;
+                uint32_t sender_ip = out_if->ip;*/
                 /* get the packet frame in the waiting queue */
                 uint8_t *buf = packet_walker->buf;
                 uint8_t *receiver_mac = ((sr_ethernet_hdr_t *)buf)->ether_shost;
                 uint32_t receiver_ip = ((sr_ip_hdr_t *)((char *)buf+ sizeof(sr_ethernet_hdr_t)))->ip_src;
-				uint32_t sender = ((sr_ip_hdr_t *)((char *)buf+ sizeof(sr_ethernet_hdr_t)))->ip_dst;
+				/*uint32_t sender = ((sr_ip_hdr_t *)((char *)buf+ sizeof(sr_ethernet_hdr_t)))->ip_dst;*/
 
 				struct sr_rt* longest_pref_match = sr_lpm(sr, receiver_ip);
 				struct sr_if *cont_if = sr_get_interface(sr, longest_pref_match->interface);
@@ -100,7 +101,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
 					handle_arpreq(arp_req_1, sr);
 				}
                 /* Send icmp type 3 packet */
-         		/* sr_send_packet(sr, icmp_t3_hdr, packet_len, longest_pref_match->interface);
+         		/* sr_send_packet(sr, icmp_t3_hdr, packet_len, longest_pref_match->interface);*/
 				/* printf("---------------- Host unreachable -----------------\n"); */
 				packet_walker = packet_walker->next;
             }
@@ -405,4 +406,5 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     
     return NULL;
 }
+
 

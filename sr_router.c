@@ -148,14 +148,14 @@ void sr_handle_arppacket(struct sr_instance* sr,
     /* Get the connected interface in the router */
     struct sr_if *sr_con_if = sr_get_interface(sr, interface);
 	/* Get the detination interface in the router */
-	struct sr_if *sr_iface = sr_get_router_if(sr, arp_hdr->ar_tip);
+	/*struct sr_if *sr_iface = sr_get_router_if(sr, arp_hdr->ar_tip);*/
 	
 	/* If the connected interface exists, because arp has to be the connected interface */
     if (sr_con_if) {
         /* ********** ARP request ********** */
         /* Construct an arp reply and send it back */
         if (ar_op == arp_op_request) {
-            /*fprintf(stderr, "********** ARP REQUEST **********\n"); /* ar_op = 1 */
+            /*fprintf(stderr, "********** ARP REQUEST **********\n");  ar_op = 1 */
             /* Set the back-packet length */
             int packet_len = ARP_PACKET_LEN;
             uint8_t *arp_reply_hdr = (uint8_t *)malloc(packet_len);
@@ -167,14 +167,14 @@ void sr_handle_arppacket(struct sr_instance* sr,
             create_back_arp_hdr(arp_hdr, (sr_arp_hdr_t *)((unsigned char *)arp_reply_hdr+ETHER_PACKET_LEN), sr_con_if);
 
             /* Send APR reply */
-            sr_send_packet(sr, (sr_ethernet_hdr_t *)arp_reply_hdr, packet_len, sr_con_if->name);
+            sr_send_packet(sr, /*(sr_ethernet_hdr_t *)*/arp_reply_hdr, packet_len, sr_con_if->name);
             free(arp_reply_hdr);
             return;
         }
         /* ********** ARP reply ********** */
         /* Cache it, go thru my request queue and send outstanding packets */
         else if (ar_op == arp_op_reply) {
-            /*fprintf(stderr, "********** ARP REPLY **********\n");  /* ar_op = 2 */
+            /*fprintf(stderr, "********** ARP REPLY **********\n");   ar_op = 2 */
             /* cache first, and send all the packets in the queue with ip->mac mapping!!! */
             handle_arpreply(arp_hdr, sr);
             return;
@@ -420,7 +420,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
                 memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
                 sr_send_packet(sr, packet, len, out_if->name);
 				printf("Received IP header\n");
-				print_hdr_ip(ip_hdr);
+				print_hdr_ip((uint8_t*)ip_hdr);
                 /* free the entry */
                 free(arp_entry);
                 return;
@@ -577,7 +577,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr, struct sr_
 	new_ip_hdr->ip_hl = ip_hdr->ip_hl;			/* header length */
 	new_ip_hdr->ip_v = ip_hdr->ip_v; 			/* header version */
     new_ip_hdr->ip_tos = ip_hdr->ip_tos;        /* type of service */
-    new_ip_hdr->ip_len = htons(56); /* ip_hdr->ip_len;        /* total length */
+    new_ip_hdr->ip_len = htons(56); /* ip_hdr->ip_len;         total length */
     new_ip_hdr->ip_id = 0; /*ip_hdr->ip_id;*/          /* identification */
     new_ip_hdr->ip_off = htons(0b0100000000000000);        /* fragment offset field */
     new_ip_hdr->ip_ttl = 64;                    /* time to live */
@@ -605,7 +605,7 @@ void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr, unsig
     new_icmp_hdr->icmp_sum = 0;
     memcpy(new_icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_hdr+sizeof(sr_icmp_hdr_t), icmp_whole_size-sizeof(sr_icmp_hdr_t));
     new_icmp_hdr->icmp_sum = cksum(new_icmp_hdr, icmp_whole_size);
-	print_hdr_icmp(new_icmp_hdr);
+	print_hdr_icmp((uint8_t*)new_icmp_hdr);
     return;
 }
 
@@ -625,7 +625,7 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
     icmp_t3_hdr->icmp_sum = checksum;
 
 /*	memcpy(icmp_t3_hdr->data, ip_hdr, sizeof(sr_ip_hdr_t)); */ 
-	print_hdr_icmp(icmp_t3_hdr);
+	print_hdr_icmp((uint8_t*)icmp_t3_hdr);
     return;
 }
 
@@ -661,7 +661,7 @@ struct sr_rt *sr_lpm(struct sr_instance *sr, uint32_t ip_dst) {
 
     while (routing_table) {
         if ((ip_dst & routing_table->mask.s_addr) == (routing_table->dest.s_addr & routing_table->mask.s_addr)) {
-printf("%l\n",routing_table->mask.s_addr);
+/*printf("%l\n",routing_table->mask.s_addr);*/
             if (len < routing_table->mask.s_addr) { /* routing_table->dest.s_addr & routing_table->mask.s_addr) { */
                 len = routing_table->mask.s_addr; /*& routing_table->mask.s_addr;*/
                 lpm_rt = routing_table;
@@ -732,4 +732,5 @@ struct sr_if *sr_get_router_if(struct sr_instance *sr, uint32_t ip) {
 	}
 	return NULL;
 }
+
 
