@@ -64,7 +64,7 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
                 sr_ethernet_hdr_t *new_eth_hdr = (sr_ethernet_hdr_t *)icmp_t3_hdr;
                 sr_ethernet_hdr_t *eth_hdr = (sr_ethernet_hdr_t *)buf;
 				memcpy(new_eth_hdr->ether_dhost, receiver_mac, ETHER_ADDR_LEN);
-             /*   memcpy(new_eth_hdr->ether_dhost, receiver_mac, ETHER_ADDR_LEN); */
+             	/*   memcpy(new_eth_hdr->ether_dhost, receiver_mac, ETHER_ADDR_LEN); */
                 memcpy(new_eth_hdr->ether_shost, cont_if->addr, ETHER_ADDR_LEN);
                 new_eth_hdr->ether_type = eth_hdr->ether_type;
                 /* Create ip header */
