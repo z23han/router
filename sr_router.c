@@ -521,7 +521,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				    create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_con_if);
 					/*	((sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN))->ip_ttl += 1; */
 
-				    /* Send icmp type 3 port unreachable */
+				    /* Send icmp type 3 net unreachable */
 				    /* Create icmp net unreachable packet */
 				    /* icmp_t3 type=3, code=0 */
 				    create_icmp_t3_hdr(ip_hdr, (sr_icmp_t3_hdr_t *)((char *)icmp_t3_hdr+IP_PACKET_LEN), 3, 0);
@@ -680,8 +680,6 @@ void create_icmp_t3_hdr(sr_ip_hdr_t *ip_hdr, sr_icmp_t3_hdr_t *icmp_t3_hdr, uint
 	icmp_t3_hdr->icmp_sum = 0;
     uint16_t checksum = cksum(icmp_t3_hdr, sizeof(sr_icmp_t3_hdr_t));
     icmp_t3_hdr->icmp_sum = checksum;
-
-/*	memcpy(icmp_t3_hdr->data, ip_hdr, sizeof(sr_ip_hdr_t)); */ 
 	print_hdr_icmp((uint8_t*)icmp_t3_hdr);
     return;
 }
