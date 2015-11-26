@@ -650,6 +650,7 @@ void create_echo_ip_hdr(sr_ip_hdr_t *ip_hdr, sr_ip_hdr_t *new_ip_hdr, struct sr_
 void create_icmp_hdr(sr_icmp_hdr_t *icmp_hdr, sr_icmp_hdr_t *new_icmp_hdr, unsigned int len) {
     assert(icmp_hdr);
     assert(new_icmp_hdr);
+    memcpy(new_icmp_hdr, icmp_hdr, sizeof(sr_icmp_hdr_t));
     /* here we construct a echo reply icmp */
 	unsigned int icmp_whole_size = len - IP_PACKET_LEN;
     new_icmp_hdr->icmp_type = 0;
