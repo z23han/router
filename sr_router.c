@@ -368,11 +368,9 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
 			if (longest_pref_match) {
 				/* check ARP cache */
-				/*struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);*/
-				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, longest_pref_match->gw.s_addr); /* ip_hdr->ip_dst */
+				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, longest_pref_match->gw.s_addr);
 				
 				/* Send ICMP port unreachable */
-				/*struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);*/
 				if (arp_entry != NULL) {
 
 					int packet_len = ICMP_T3_PACKET_LEN;
@@ -494,10 +492,8 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
 			if (longest_pref_match) {
 				/* check ARP cache */
-				/*struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src);*/
 				struct sr_arpentry *arp_entry = sr_arpcache_lookup(&sr->cache, longest_pref_match->gw.s_addr); /* ip_hdr->ip_dst */
 
-				/* struct sr_arpentry *arp_entry = sr_arpcache_lookup(sr_arp_cache, ip_hdr->ip_src); */
 				if (arp_entry) {
 					int packet_len = ICMP_T3_PACKET_LEN;
 				    uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
