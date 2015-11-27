@@ -295,6 +295,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 					if (arp_entry != NULL) {
 						/* We need to send the icmp echo reply */
 				        /* Modify ethernet header */
+
 						memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
 						memcpy(eth_hdr->ether_shost, sr_con_if->addr, ETHER_ADDR_LEN);
 
@@ -320,6 +321,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 
 				        /* Send icmp echo reply */
 				        sr_send_packet(sr, packet, len, sr_con_if->name);
+						/*free(icmp_echo_packet);*/
 				        return;
 					}
 					/* Else no hit, we cache it to the queue and send arp request */ 
