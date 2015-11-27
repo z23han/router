@@ -471,6 +471,14 @@ void sr_handle_ippacket(struct sr_instance* sr,
                 /* send an ARP request for the next-hop IP */
                 /* add the packet to the queue of packets waiting on this ARP request */
                 /* Add request to ARP queue*/
+
+                ip_hdr->ip_ttl--;
+
+                /* recompute the packet checksum over the modified header */
+                ip_hdr->ip_sum = 0;
+                uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+                ip_hdr->ip_sum = new_ip_sum;
+                
                 struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, out_if->name);
                 /* send ARP request, this is a broadcast */
                 handle_arpreq(arp_req, sr);
