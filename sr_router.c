@@ -227,13 +227,6 @@ void sr_handle_ippacket(struct sr_instance* sr,
 	}
 	ip_hdr->ip_sum = old_ip_sum;
 
-	ip_hdr->ip_ttl--;
-
-	/* recompute the packet checksum over the modified header */
-	ip_hdr->ip_sum = 0;
-	uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-	ip_hdr->ip_sum = new_ip_sum;
-
     /* Get the arp cache */
     struct sr_arpcache *sr_arp_cache = &sr->cache;
 
@@ -458,6 +451,14 @@ void sr_handle_ippacket(struct sr_instance* sr,
                 /* Send frame to next hop */
                 /* update the eth_hdr source and destination ethernet address */
                 /* use next_hop_ip->mac mapping in the entry to send the packet */
+
+                ip_hdr->ip_ttl--;
+
+                /* recompute the packet checksum over the modified header */
+                ip_hdr->ip_sum = 0;
+                uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+                ip_hdr->ip_sum = new_ip_sum;
+
                 memcpy(eth_hdr->ether_shost, out_if->addr, ETHER_ADDR_LEN);
                 memcpy(eth_hdr->ether_dhost, arp_entry->mac, ETHER_ADDR_LEN);
                 sr_send_packet(sr, packet, len, out_if->name);
