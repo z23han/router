@@ -236,7 +236,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
 	struct sr_if *sr_con_if = sr_get_interface(sr, interface);
 
     /* Check the time exceeded condition, if ttl==0, we need to form icmp 11 and send back */
-    if (ip_hdr->ip_ttl <= 0) {
+    if (ip_hdr->ip_ttl <= 1) {
         /* time exceeded message and icmp type 11 */
         printf("TTL time exceeded\n");
         int packet_len = ICMP_T3_PACKET_LEN;
@@ -478,7 +478,7 @@ void sr_handle_ippacket(struct sr_instance* sr,
                 ip_hdr->ip_sum = 0;
                 uint16_t new_ip_sum = cksum(ip_hdr, sizeof(sr_ip_hdr_t));
                 ip_hdr->ip_sum = new_ip_sum;
-                
+
                 struct sr_arpreq *arp_req = sr_arpcache_queuereq(sr_arp_cache, ip_hdr->ip_dst, packet, len, out_if->name);
                 /* send ARP request, this is a broadcast */
                 handle_arpreq(arp_req, sr);
