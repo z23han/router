@@ -46,13 +46,10 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
 					return;
 				}
                 /* Collect the sender and receiver mac/ip addresses */
-                /*unsigned char *sender_mac = out_if->addr;
-                uint32_t sender_ip = out_if->ip;*/
                 /* get the packet frame in the waiting queue */
                 uint8_t *buf = packet_walker->buf;
                 uint8_t *receiver_mac = ((sr_ethernet_hdr_t *)buf)->ether_shost;
                 uint32_t receiver_ip = ((sr_ip_hdr_t *)((char *)buf+ sizeof(sr_ethernet_hdr_t)))->ip_src;
-				/*uint32_t sender = ((sr_ip_hdr_t *)((char *)buf+ sizeof(sr_ethernet_hdr_t)))->ip_dst;*/
 
 				struct sr_rt* longest_pref_match = sr_lpm(sr, receiver_ip);
 				struct sr_if *cont_if = sr_get_interface(sr, longest_pref_match->interface);
@@ -101,7 +98,6 @@ void handle_arpreq(struct sr_arpreq *arp_req, struct sr_instance *sr) {
 					handle_arpreq(arp_req_1, sr);
 				}
                 /* Send icmp type 3 packet */
-         		/* sr_send_packet(sr, icmp_t3_hdr, packet_len, longest_pref_match->interface);*/
 				/* printf("---------------- Host unreachable -----------------\n"); */
 				packet_walker = packet_walker->next;
             }
@@ -187,9 +183,7 @@ void sr_arpcache_sweepreqs(struct sr_instance *sr) {
 /* Checks if an IP->MAC mapping is in the cache. IP is in network byte order.
    You must free the returned structure if it is not NULL. */
 struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip) {
-   printf("start lookup\n");   
     pthread_mutex_lock(&(cache->lock));
-     printf("start lookup get lock\n");  
     struct sr_arpentry *entry = NULL, *copy = NULL;
     
     int i;
@@ -206,8 +200,7 @@ struct sr_arpentry *sr_arpcache_lookup(struct sr_arpcache *cache, uint32_t ip) {
         memcpy(copy, entry, sizeof(struct sr_arpentry));
     }
         
-    pthread_mutex_unlock(&(cache->lock));
-   printf("end lookup\n");   
+    pthread_mutex_unlock(&(cache->lock)); 
     return copy;
 }
 
