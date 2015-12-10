@@ -368,12 +368,12 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				    uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
 				    /* Create ethernet header */
-				    create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, out_iface);
+				    create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_iface);
 					/*memcpy(((sr_ethernet_hdr_t *)icmp_t3_hdr)->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
 					memcpy(((sr_ethernet_hdr_t *)icmp_t3_hdr)->ether_shost, eth_hdr->ether_dhost, ETHER_ADDR_LEN);*/
 
 				    /* Create ip header */
-				    create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), out_iface);
+				    create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_iface);
 					/*sr_ip_hdr_t *icmp_t3_hdr_ip = (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN);
 					icmp_t3_hdr_ip->ip_src = ip_hdr->ip_dst;
 					icmp_t3_hdr_ip->ip_sum = 0;
@@ -398,12 +398,12 @@ void sr_handle_ippacket(struct sr_instance* sr,
 				    uint8_t *icmp_t3_hdr = (uint8_t *)malloc(packet_len);
 
 				    /* Create ethernet header */
-				    create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, out_iface);
+				    create_ethernet_hdr(eth_hdr, (sr_ethernet_hdr_t *)icmp_t3_hdr, sr_iface);
 					/*memcpy(((sr_ethernet_hdr_t *)icmp_t3_hdr)->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
 					memcpy(((sr_ethernet_hdr_t *)icmp_t3_hdr)->ether_shost, eth_hdr->ether_dhost, ETHER_ADDR_LEN);*/
 
 				    /* Create ip header */
-				    create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), out_iface);
+				    create_echo_ip_hdr(ip_hdr, (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN), sr_iface);
 					/*sr_ip_hdr_t *icmp_t3_hdr_ip = (sr_ip_hdr_t *)((char *)icmp_t3_hdr+ETHER_PACKET_LEN);
 					icmp_t3_hdr_ip->ip_src = ip_hdr->ip_dst;
 					icmp_t3_hdr_ip->ip_sum = 0;
